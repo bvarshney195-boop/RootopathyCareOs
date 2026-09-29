@@ -1,0 +1,155 @@
+previews:
+  generation: off
+
+services:
+  - type: pserv
+    name: rootopathy-careos-demo-postgres
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    dockerfilePath: ./deploy/render/postgres/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    envVars:
+      - key: POSTGRES_DB
+        value: careos_demo
+      - key: POSTGRES_USER
+        value: careos_migrator
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+      - key: CAREOS_DB_APP_USER
+        value: careos_app
+      - key: CAREOS_DB_APP_PASSWORD
+        generateValue: true
+      - key: CAREOS_DB_LOCAL_REFERENCE_AUTHORITY
+        value: "true"
+    disk:
+      name: rootopathy-careos-demo-postgres-data
+      mountPath: /var/lib/postgresql
+      sizeGB: 5
+
+  - type: keyvalue
+    name: rootopathy-careos-demo-kv
+    region: singapore
+    plan: 256mb
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+    ipAllowList: []
+
+  - type: pserv
+    name: rootopathy-careos-demo-backend
+    runtime: docker
+    region: singapore
+    plan: 1c-2g
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: local,render
+      - key: DB_HOST
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-postgres
+          property: host
+      - key: DB_PORT
+        value: "5432"
+      - key: POSTGRES_DB
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-postgres
+          envVarKey: POSTGRES_DB
+      - key: DB_MIGRATION_USERNAME
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-postgres
+          envVarKey: POSTGRES_USER
+      - key: DB_MIGRATION_PASSWORD
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-postgres
+          envVarKey: POSTGRES_PASSWORD
+      - key: DB_APP_USERNAME
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-postgres
+          envVarKey: CAREOS_DB_APP_USER
+      - key: DB_APP_PASSWORD
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-postgres
+          envVarKey: CAREOS_DB_APP_PASSWORD
+      - key: DB_APP_ROLE
+        value: careos_app
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: rootopathy-careos-demo-kv
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: rootopathy-careos-demo-kv
+          property: port
+      - key: CAREOS_ALLOWED_ORIGINS
+        sync: false
+      - key: CAREOS_BASE_URL
+        sync: false
+      - key: CAREOS_BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: CAREOS_BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: CAREOS_SECURITY_MAIL_FROM
+        sync: false
+      - key: CAREOS_TOKEN_PEPPER
+        generateValue: true
+      - key: CAREOS_MFA_ENCRYPTION_KEY
+        generateValue: true
+      - key: CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER
+        generateValue: true
+      - key: CAREOS_SERVICE_IDENTITIES_ENABLED
+        value: "false"
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: CAREOS_STORAGE_S3_ENABLED
+        value: "false"
+      - key: CAREOS_EVIDENCE_EXPORT_STORAGE_ENABLED
+        value: "false"
+      - key: CAREOS_SCANNER_CLAMAV_ENABLED
+        value: "false"
+      - key: CAREOS_DOCUMENT_PROMOTION_ENABLED
+        value: "false"
+      - key: CAREOS_DOCUMENT_SIGNED_ACCESS_ENABLED
+        value: "false"
+      - key: CAREOS_DOCUMENT_RETENTION_ENABLED
+        value: "false"
+      - key: CAREOS_JOBS_REDIS_ENABLED
+        value: "false"
+      - key: CAREOS_NOTIFICATIONS_POSTGRES_ENABLED
+        value: "false"
+
+  - type: web
+    name: rootopathy-careos-demo
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    autoDeployTrigger: checksPass
+    healthCheckPath: /
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: BACKEND_HOSTPORT
+        fromService:
+          type: pserv
+          name: rootopathy-careos-demo-backend
+          property: hostport
